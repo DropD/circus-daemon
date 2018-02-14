@@ -1,0 +1,15 @@
+*.pyc
+.*.swp
+.*.swo
+.vimprj
+.ropeproject
+*.egg*
+.idea
+.cache
+*.orig
+*_BACKUP_*
+*_BASE_*
+*_LOCAL_*
+*_REMOTE_*
+.coverage
+.tox
