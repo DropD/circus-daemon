@@ -11,6 +11,10 @@ from aiida.settings import profile_conf
 
 PROFILE_UUID = profile_conf['RMQ_PREFIX']
 WATCHER_NAME = 'aiida-{}'.format(PROFILE_UUID)
+VERDI_BIN = path.abspath(path.join(executable, '../verdi'))
+VIRTUALENV = path.abspath(path.join(executable, '../../'))
+STREAMER_NAME = 'outstream'
+FOLDER = path.abspath(path.dirname(__file__))
 
 
 class Client(object):
@@ -50,15 +54,14 @@ class Client(object):
                 'command': 'add',
                 'properties': {
                     'name': WATCHER_NAME,
-                    # ~ 'cmd': 'verdi devel run_daemon',
-                    'cmd': '/home/hauselmann/miniconda2/envs/aiida-dev-workflows/bin/verdi devel run_daemon',
-                    'virtualenv': '/home/hauselmann/miniconda2/envs/aiida-dev-workflows',
+                    'cmd': '{} devel run_daemon'.format(VERDI_BIN),
+                    'virtualenv': VIRTUALENV,
                     'copy_env': True,
-                    # ~ 'pidfile': '/home/hauselmann/Documents/circus-daemon/aiida-ipy.pid',
-                    # ~ 'stdout_stream.class': 'FileStream',
-                    # ~ 'stdout_stream.filename': '/home/hauselmann/Documents/circus-daemon/aiida-ipy.log',
+                    # ~ 'pidfile': '',
+                    'stdout_stream.class': 'FileStream',
+                    'stdout_stream.filename': 'test.log',
                     # ~ 'loglevel': 'debug',
-                    # ~ 'logoutput': '/home/hauselmann/Documents/circus-daemon/aiida-ipy-watcher.log',
+                    # ~ 'logoutput': '',
                     'autostart': True,
                     # ~ 'warmup_delay': 5
                 }
@@ -66,10 +69,33 @@ class Client(object):
             click.echo(command)
             self._client.call(command)
             return self.start_watcher()
-        elif not self.is_daemon_active():
+        elif not self.is_watcher_active():
             click.echo('starting the watcher...')
             return self.start_watcher()
         return None
+
+    def start_outstreamer(self):
+        if not STREAMER_NAME in self.list_watchers():
+            command = {
+                'command': 'add',
+                'properties': {
+                    'name': STREAMER_NAME,
+                    'cmd': 'bash outstream.sh',
+                    'stdout_stream.class': 'logging.handlers.RotatingFileHandler',
+                    'stdout_stream.filename': 'stream.log',
+                }
+            }
+            self._client.call(command)
+            return self.start_watcher(STREAMER_NAME)
+            self._client.call({
+                'command': 'set',
+                'properties': {
+                    'name': STREAMER_NAME,
+                    'options': {'stdout_stream.filename': 'stream.log'}
+                }
+            })
+        elif not self.is_watcher_active(STREAMER_NAME):
+            return self.start_watcher(STREAMER_NAME)
 
     def stop_aiida_daemon(self):
         if WATCHER_NAME in self.list_watchers():
@@ -81,28 +107,28 @@ class Client(object):
             })
         return None
 
-    def start_watcher(self):
+    def start_watcher(self, name=WATCHER_NAME):
         response = self._client.call({
             'command': 'start',
             'properties': {
-                'name': WATCHER_NAME
+                'name': name
             }
         })
 
         return bool(response.get('status', None) == 'ok')
 
-    def status(self):
+    def status(self, name=WATCHER_NAME):
         response = self._client.call({
             'command': 'status',
             'properties': {
-                'name': WATCHER_NAME
+                'name': name
             }
         })
         if response.get('status', None):
             return str(response['status'])
 
-    def is_daemon_active(self):
-        return bool(self.status() == 'active')
+    def is_watcher_active(self, name):
+        return bool(self.status(name) == 'active')
 
     def list_watchers(self):
         response = self._client.call({
@@ -125,6 +151,13 @@ def start():
     click.echo(client.status())
 
 @grinzold.command()
+def stream():
+    client = Client()
+    client.startup()
+    click.echo(client.start_outstreamer())
+    click.echo(client.status(STREAMER_NAME))
+
+@grinzold.command()
 def stop():
     client = Client()
     client.stop_aiida_daemon()
@@ -139,7 +172,8 @@ def quit():
 @grinzold.command()
 def status():
     client = Client()
-    click.echo(client.status())
+    click.echo('aiida: {}'.format(client.status()))
+    click.echo('streamer: {}'.format(client.status(STREAMER_NAME)))
 
 
 if __name__ == '__main__':
