@@ -50,7 +50,7 @@ class ProfileConfig(object):
 
     @property
     def cmd_string(self):
-        return '{} -p {} devel run_daemon'.format(VERDI_BIN, self.profile),
+        return '{} -p {} devel run_daemon'.format(VERDI_BIN, self.profile)
 
 @click.group('balrog')
 def balrog():
@@ -80,7 +80,14 @@ def status(profile):
         })
     except CallError:
         pass
-    click.echo(str(response.get('status', 'shut down.')))
+
+    status = response.get('status', 'shut down.')
+    pid = response.get('pid', None)
+
+    click.echo('{}{}'.format(
+        str(status),
+        str(' pid: {}'.format(pid) if pid else '')
+    ))
 
 
 @balrog.command('start')
